@@ -60,6 +60,7 @@ const Dashboard = () => {
     todayUpdatesCount,
     resetToSaiStoreDemo,
     clearAllData,
+    isCloudConnected,
   } = useInventory();
 
   const [activeTab, setActiveTab] = useState<MainTab>("inventory");
@@ -355,6 +356,11 @@ const Dashboard = () => {
               <div className="flex items-center gap-1 bg-red-950/60 border border-red-500/30 px-2 py-0.5 rounded-xl text-xs">
                 <WifiOff className="h-3 w-3 text-red-400" />
                 <span className="text-red-300 font-bold text-[10px]">Offline</span>
+              </div>
+            ) : isCloudConnected ? (
+              <div className="hidden sm:flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-xl text-xs">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-emerald-300 font-bold text-[11px]">☁️ Supabase Cloud</span>
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-2 bg-slate-800/60 px-3 py-1 rounded-xl border border-border/50 text-xs">

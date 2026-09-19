@@ -7,6 +7,14 @@ import type {
   TimeFilter,
 } from "@/types/inventory";
 import { TRADE_UNITS } from "@/lib/tradeUnits";
+import {
+  isSupabaseConfigured,
+  fetchProductsFromCloud,
+  upsertProductToCloud,
+  deleteProductFromCloud,
+  fetchTransactionsFromCloud,
+  insertTransactionToCloud,
+} from "@/lib/supabaseClient";
 
 const PRODUCTS_STORAGE_KEY = "voicestock_v3_products";
 const TRANSACTIONS_STORAGE_KEY = "voicestock_v3_transactions";
@@ -171,6 +179,24 @@ export function useInventory() {
     saveTransactions(transactions);
   }, [transactions]);
 
+  // Initial cloud sync from Supabase when configured
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      fetchProductsFromCloud().then((cloudProducts) => {
+        if (cloudProducts && cloudProducts.length > 0) {
+          setProducts(cloudProducts);
+          saveProducts(cloudProducts);
+        }
+      });
+      fetchTransactionsFromCloud().then((cloudTxs) => {
+        if (cloudTxs && cloudTxs.length > 0) {
+          setTransactions(cloudTxs);
+          saveTransactions(cloudTxs);
+        }
+      });
+    }
+  }, []);
+
   const addProduct = useCallback(
     (data: Omit<Product, "id" | "createdAt">) => {
       const p: Product = {
@@ -194,6 +220,11 @@ export function useInventory() {
         notes: "New product added to inventory",
       };
       setTransactions((prev) => [tx, ...prev]);
+
+      if (isSupabaseConfigured) {
+        upsertProductToCloud(p);
+        insertTransactionToCloud(tx);
+      }
       return p;
     },
     [products]
@@ -202,7 +233,16 @@ export function useInventory() {
   const updateProduct = useCallback(
     (id: number, data: Partial<Omit<Product, "id" | "createdAt">>) => {
       setProducts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p))
+        prev.map((p) => {
+          if (p.id === id) {
+            const updated = { ...p, ...data, updatedAt: new Date().toISOString() };
+            if (isSupabaseConfigured) {
+              upsertProductToCloud(updated);
+            }
+            return updated;
+          }
+          return p;
+        })
       );
     },
     []
@@ -210,6 +250,9 @@ export function useInventory() {
 
   const deleteProduct = useCallback((id: number) => {
     setProducts((prev) => prev.filter((p) => p.id !== id));
+    if (isSupabaseConfigured) {
+      deleteProductFromCloud(id);
+    }
   }, []);
 
   const setProductReorderLevel = useCallback((productId: number, newThresholdInTradeUnits: number) => {
@@ -302,6 +345,11 @@ export function useInventory() {
       };
 
       setTransactions((prev) => [tx, ...prev]);
+
+      if (isSupabaseConfigured) {
+        insertTransactionToCloud(tx);
+        upsertProductToCloud({ ...target, quantity: finalRemainingStock });
+      }
     },
     [setProductReorderLevel]
   );
@@ -440,5 +488,6 @@ export function useInventory() {
     getSalesMetrics,
     resetToSaiStoreDemo,
     clearAllData,
+    isCloudConnected: isSupabaseConfigured,
   };
 }
