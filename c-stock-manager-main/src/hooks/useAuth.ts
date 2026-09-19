@@ -20,27 +20,20 @@ function getUsers(): StoredUser[] {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<string | null>(() => {
-    return sessionStorage.getItem(SESSION_KEY) || "Sai General Stores";
-  });
+  const [user, setUser] = useState<string>("Sai General Stores");
 
-  const login = useCallback((username: string, password: string): boolean => {
-    const users = getUsers();
-    const found = users.find(
-      (u) => u.username === username && u.password === password
-    );
-    if (found) {
-      sessionStorage.setItem(SESSION_KEY, username);
-      setUser(username);
-      return true;
-    }
-    return false;
+  const login = useCallback((username: string, _password: string): boolean => {
+    sessionStorage.setItem(SESSION_KEY, username);
+    setUser(username);
+    return true;
   }, []);
 
   const logout = useCallback(() => {
+    // Keep user logged in as default store profile so no login screen blocks access
     sessionStorage.removeItem(SESSION_KEY);
-    setUser(null);
+    setUser("Sai General Stores");
   }, []);
 
-  return { user, isAuthenticated: !!user, login, logout };
+  return { user: user || "Sai General Stores", isAuthenticated: true, login, logout };
 }
+

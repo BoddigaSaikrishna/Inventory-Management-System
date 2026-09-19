@@ -315,10 +315,6 @@ const Dashboard = () => {
     speakText(speech, currentLanguage);
   };
 
-  if (!isAuthenticated) {
-    return <LoginScreen onLogin={login} />;
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-36 sm:pb-32">
       {/* Offline Status Bar Banner */}
@@ -380,16 +376,6 @@ const Dashboard = () => {
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               <span className="hidden sm:inline">Reset Demo</span>
               <span className="sm:hidden text-[11px]">Reset</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={logout}
-              className="text-muted-foreground hover:text-white text-xs h-8 px-2 sm:px-3"
-            >
-              <LogOut className="mr-1 h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
