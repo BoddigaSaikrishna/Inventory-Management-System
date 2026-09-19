@@ -42,6 +42,9 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin requests
   if (url.origin !== location.origin) return;
 
+  // Never intercept localhost or Vite dev server modules
+  if (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.pathname.includes("/@") || url.pathname.includes("/src/")) return;
+
   // HTML pages: Network-first (fresh content), fallback to cache
   if (request.mode === "navigate" || request.headers.get("Accept")?.includes("text/html")) {
     event.respondWith(

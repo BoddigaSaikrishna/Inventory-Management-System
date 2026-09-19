@@ -21,7 +21,7 @@ function getUsers(): StoredUser[] {
 
 export function useAuth() {
   const [user, setUser] = useState<string | null>(() => {
-    return sessionStorage.getItem(SESSION_KEY);
+    return sessionStorage.getItem(SESSION_KEY) || "Sai General Stores";
   });
 
   const login = useCallback((username: string, password: string): boolean => {
