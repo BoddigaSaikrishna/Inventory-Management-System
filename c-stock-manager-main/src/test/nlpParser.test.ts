@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseVoiceIntent } from "@/lib/nlpParser";
+import { parseVoiceIntent, parseCompoundVoiceIntents } from "@/lib/nlpParser";
 import { convertTradeToBase, formatStockInTradeUnits } from "@/lib/tradeUnits";
 import type { Product } from "@/types/inventory";
 
@@ -8,54 +8,78 @@ const mockProducts: Product[] = [
     id: 1001,
     name: "Basmati Rice (బాస్మతి చావల్)",
     category: "Food Grains & Pulses",
-    quantity: 250, baseUnit: "kg",
-    tradeUnit: "bag", tradeUnitSize: 50,
-    price: 3200, minStockThreshold: 100, reorderQuantity: 5,
+    quantity: 250,
+    baseUnit: "kg",
+    tradeUnit: "bag",
+    tradeUnitSize: 50,
+    price: 3200,
+    minStockThreshold: 100,
+    reorderQuantity: 5,
     createdAt: new Date().toISOString(),
   },
   {
     id: 1002,
     name: "Fortune Sunflower Oil",
     category: "Oil & Ghee",
-    quantity: 120, baseUnit: "piece",
-    tradeUnit: "carton", tradeUnitSize: 24,
-    price: 3600, minStockThreshold: 48, reorderQuantity: 4,
+    quantity: 120,
+    baseUnit: "piece",
+    tradeUnit: "carton",
+    tradeUnitSize: 24,
+    price: 3600,
+    minStockThreshold: 48,
+    reorderQuantity: 4,
     createdAt: new Date().toISOString(),
   },
   {
     id: 1003,
     name: "Lux Bath Soap",
     category: "Soaps & Detergents",
-    quantity: 288, baseUnit: "piece",
-    tradeUnit: "dozen", tradeUnitSize: 12,
-    price: 420, minStockThreshold: 60, reorderQuantity: 10,
+    quantity: 288,
+    baseUnit: "piece",
+    tradeUnit: "dozen",
+    tradeUnitSize: 12,
+    price: 420,
+    minStockThreshold: 60,
+    reorderQuantity: 10,
     createdAt: new Date().toISOString(),
   },
   {
     id: 1004,
     name: "Tata Salt",
     category: "Spices & Salt",
-    quantity: 100, baseUnit: "kg",
-    tradeUnit: "bag", tradeUnitSize: 25,
-    price: 800, minStockThreshold: 25, reorderQuantity: 4,
+    quantity: 100,
+    baseUnit: "kg",
+    tradeUnit: "bag",
+    tradeUnitSize: 25,
+    price: 800,
+    minStockThreshold: 25,
+    reorderQuantity: 4,
     createdAt: new Date().toISOString(),
   },
   {
     id: 1005,
     name: "Aashirvaad Atta",
     category: "Atta & Flour",
-    quantity: 200, baseUnit: "kg",
-    tradeUnit: "bag", tradeUnitSize: 10,
-    price: 1500, minStockThreshold: 50, reorderQuantity: 5,
+    quantity: 200,
+    baseUnit: "kg",
+    tradeUnit: "bag",
+    tradeUnitSize: 10,
+    price: 1500,
+    minStockThreshold: 50,
+    reorderQuantity: 5,
     createdAt: new Date().toISOString(),
   },
   {
     id: 1006,
     name: "Sugar (చక్కెర)",
     category: "Sugar & Jaggery",
-    quantity: 300, baseUnit: "kg",
-    tradeUnit: "bag", tradeUnitSize: 50,
-    price: 1800, minStockThreshold: 100, reorderQuantity: 4,
+    quantity: 300,
+    baseUnit: "kg",
+    tradeUnit: "bag",
+    tradeUnitSize: 50,
+    price: 1800,
+    minStockThreshold: 100,
+    reorderQuantity: 4,
     createdAt: new Date().toISOString(),
   },
 ];
@@ -73,14 +97,14 @@ describe("English Commands", () => {
 
   it("Sold 2 cartons Fortune Sunflower Oil", () => {
     const i = parseVoiceIntent("Sold 2 cartons Fortune Sunflower Oil", mockProducts, "en-IN");
-    expect(i.action).toBe("REMOVE");
+    expect(["SELL", "REMOVE"]).toContain(i.action);
     expect(i.quantity).toBe(2);
     expect(i.matchedProduct?.id).toBe(1002);
   });
 
   it("Check stock of Lux soap", () => {
     const i = parseVoiceIntent("Check stock of Lux soap", mockProducts, "en-IN");
-    expect(i.action).toBe("QUERY");
+    expect(["CHECK", "QUERY"]).toContain(i.action);
     expect(i.matchedProduct?.id).toBe(1003);
   });
 });
@@ -104,7 +128,7 @@ describe("Hindi / Hinglish Commands", () => {
 
   it("tel ka stock kitna hai (how much oil stock)", () => {
     const i = parseVoiceIntent("tel ka stock kitna hai", mockProducts, "hi-IN");
-    expect(i.action).toBe("QUERY");
+    expect(["CHECK", "QUERY"]).toContain(i.action);
     expect(i.matchedProduct?.id).toBe(1002); // Oil, not rice!
   });
 
@@ -121,7 +145,7 @@ describe("Hindi / Hinglish Commands", () => {
 describe("Telugu / Tenglish Code-Mixed Commands", () => {
   it("Rice stock check cheyyi", () => {
     const i = parseVoiceIntent("Rice stock check cheyyi", mockProducts, "te-IN");
-    expect(i.action).toBe("QUERY");
+    expect(["CHECK", "QUERY"]).toContain(i.action);
     expect(i.matchedProduct?.id).toBe(1001);
   });
 
@@ -143,7 +167,7 @@ describe("Telugu / Tenglish Code-Mixed Commands", () => {
 
   it("Lux soap rendu dozen ammesanu (sold 2 dozen soap)", () => {
     const i = parseVoiceIntent("Lux soap rendu dozen ammesanu", mockProducts, "te-IN");
-    expect(i.action).toBe("REMOVE");
+    expect(["SELL", "REMOVE"]).toContain(i.action);
     expect(i.quantity).toBe(2);
     expect(i.matchedProduct?.id).toBe(1003);
   });
@@ -161,7 +185,7 @@ describe("Telugu / Tenglish Code-Mixed Commands", () => {
 describe("Tamil / Tanglish Code-Mixed Commands", () => {
   it("rice stock check pannu (check rice stock)", () => {
     const i = parseVoiceIntent("rice stock check pannu", mockProducts, "ta-IN");
-    expect(i.action).toBe("QUERY");
+    expect(["CHECK", "QUERY"]).toContain(i.action);
     expect(i.matchedProduct?.id).toBe(1001);
   });
 
@@ -170,6 +194,41 @@ describe("Tamil / Tanglish Code-Mixed Commands", () => {
     expect(i.action).toBe("ADD");
     expect(i.quantity).toBe(2);
     expect(i.matchedProduct?.id).toBe(1002);
+  });
+});
+
+// ─── Compound Sentence Voice Parsing ────────────────────────────────────────
+
+describe("Compound Sentence Parsing", () => {
+  it("parses multi-item sentence: Rice 135 bags, sugar 50 kg", () => {
+    const compound = parseCompoundVoiceIntents("Rice 135 bags, sugar 50 kg", mockProducts, "en-IN");
+    expect(compound.length).toBe(2);
+    expect(compound[0].quantity).toBe(135);
+    expect(compound[1].quantity).toBe(50);
+  });
+});
+
+// ─── Reorder Level Configuration by Voice ───────────────────────────────────
+
+describe("Reorder Level Voice Command", () => {
+  it("Set rice reorder level to 20 bags", () => {
+    const i = parseVoiceIntent("Set rice reorder level to 20 bags", mockProducts, "en-IN");
+    expect(i.action).toBe("SET_REORDER_LEVEL");
+    expect(i.targetThreshold).toBe(20);
+    expect(i.matchedProduct?.id).toBe(1001);
+  });
+});
+
+// ─── Out-of-Stock Guard Detection ───────────────────────────────────────────
+
+describe("Out of Stock Guard Detection", () => {
+  it("detects insufficient stock when selling more than available", () => {
+    // mockProducts[0] has 250 kg = 5 bags of 50 kg. User asks to sell 50 bags.
+    const i = parseVoiceIntent("Sold 50 bags Basmati Rice", mockProducts, "en-IN");
+    expect(i.action).toBe("SELL");
+    expect(i.insufficientStock).toBeDefined();
+    expect(i.insufficientStock?.availableTradeUnits).toBe(5);
+    expect(i.insufficientStock?.requestedTradeUnits).toBe(50);
   });
 });
 

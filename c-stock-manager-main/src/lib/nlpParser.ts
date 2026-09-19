@@ -146,26 +146,48 @@ const CODE_MIXED_REORDER_VERBS = [
 ];
 
 const ACTION_KEYWORDS: Record<string, string[]> = {
+  SELL: [
+    "sold", "sell", "selling", "sale", "customer took", "customer took away",
+    "bech diya", "becha", "becho", "ammesa", "ammesanu", "ammayi",
+    "అమ్మేసాను", "తీసుకో", "తీసుకున్నారు", "విற்று", "vittachu",
+  ],
   ADD: [
     "add", "added", "adding", "receive", "received", "stock in", "purchase",
-    "buying", "bought", "incoming", "new stock", "fill",
+    "buying", "bought", "incoming", "new stock", "fill", "came", "arrived",
     ...CODE_MIXED_ADD_VERBS,
   ],
   REMOVE: [
-    "remove", "issue", "issued", "sell", "sold", "selling", "deduct", "dispatch",
-    "outgoing", "stock out",
-    ...CODE_MIXED_REMOVE_VERBS,
+    "remove", "issue", "issued", "deduct", "dispatch", "outgoing", "stock out", "nikalo",
+    "తొలగించు",
+  ],
+  SALES_QUERY: [
+    "did i sell", "have i sold", "what did i sell", "how much did i sell",
+    "how much sold", "today's sales", "sales today", "sales this week",
+    "amount sold", "total sold",
+  ],
+  LOW_STOCK_QUERY: [
+    "which items are running low", "which items are low", "what items are low",
+    "items running low", "running low", "what is running low", "low stock items",
+    "which is low", "items low",
+  ],
+  REORDER_QUERY: [
+    "what do i need to buy", "what should i buy", "when should i buy",
+    "what to reorder", "need to buy", "should i buy", "to buy today",
+    "what do i buy", "what to buy",
+  ],
+  SET_REORDER_LEVEL: [
+    "remind me when", "alert at", "alert me below", "reorder level at",
+    "alert me when", "goes below", "should alert me below", "set reorder level",
+    "reorder threshold", "reorder level", "reorder limit", "reorder point",
+  ],
+  CHECK: [
+    "how much", "how many", "is left", "do i have", "stock of", "balance",
+    "remaining", "kitna bacha", "entha undi", "chupinchu", "stock check",
+    "check", ...CODE_MIXED_QUERY_VERBS,
   ],
   SET: [
     "set", "update", "current stock", "stock is", "hai", "rakho", "marpu",
     "मात्रा","स्टॉक","ఉంది","இருக்கிறது",
-  ],
-  QUERY: [
-    "how much", "how many", "check", "stock of", "balance", "remaining",
-    ...CODE_MIXED_QUERY_VERBS,
-  ],
-  REORDER: [
-    "reorder", "order", "shortage", ...CODE_MIXED_REORDER_VERBS,
   ],
 };
 
@@ -549,33 +571,66 @@ function buildFeedback(
   quantity: number | undefined,
   tradeUnit: TradeUnitKey,
   matchedProduct: Product | undefined,
-  codeMix: ReturnType<typeof detectCodeMix>
+  codeMix: ReturnType<typeof detectCodeMix>,
+  insufficientStock?: { availableTradeUnits: number; requestedTradeUnits: number; unitLabel: string }
 ): string {
-  const prodName = matchedProduct?.name ?? "(product — please select below)";
+  const prodName = matchedProduct?.name ?? "Item";
   const unitLabel = TRADE_UNITS[tradeUnit]?.label ?? tradeUnit;
   const qty = quantity ?? "?";
 
-  // Choose feedback style based on detected language mix
-  if (codeMix.hastelugu) {
-    if (action === "ADD")    return `${prodName} కి ${qty} ${unitLabel} add చేస్తున్నారు.`;
-    if (action === "REMOVE") return `${prodName} నుండి ${qty} ${unitLabel} తొలగిస్తున్నారు.`;
-    if (action === "QUERY")  return `${prodName} stock ఎంత ఉందో చూస్తున్నారు.`;
-  }
-  if (codeMix.hasHindi) {
-    if (action === "ADD")    return `${prodName} mein ${qty} ${unitLabel} add ho raha hai.`;
-    if (action === "REMOVE") return `${prodName} se ${qty} ${unitLabel} nikalenge.`;
-    if (action === "QUERY")  return `${prodName} ka stock check ho raha hai.`;
+  if (insufficientStock) {
+    return `⚠️ Not enough stock! You have only ${insufficientStock.availableTradeUnits} ${unitLabel} of ${prodName}, but asked to remove ${insufficientStock.requestedTradeUnits}.`;
   }
 
-  // Default English
-  if (action === "ADD")    return `Add ${qty} ${unitLabel} of ${prodName}.`;
-  if (action === "REMOVE") return `Deduct ${qty} ${unitLabel} of ${prodName}.`;
-  if (action === "QUERY")  return matchedProduct
-    ? `Checking stock for ${matchedProduct.name}.`
-    : `Checking total inventory.`;
-  if (action === "REORDER") return `Showing low stock items for reordering.`;
+  if (action === "SELL") {
+    if (codeMix.hastelugu) return `${prodName} ${qty} ${unitLabel} అమ్మకం రికార్డ్ అయింది.`;
+    if (codeMix.hasHindi) return `${prodName} ${qty} ${unitLabel} becha gaya.`;
+    const remainingUnits = matchedProduct
+      ? Math.max(0, Number(((matchedProduct.quantity - (quantity || 0) * (matchedProduct.tradeUnitSize || 1)) / (matchedProduct.tradeUnitSize || 1)).toFixed(1)))
+      : 0;
+    return `${qty} ${unitLabel} of ${prodName} sold. ${remainingUnits} ${unitLabel} remaining in inventory.`;
+  }
 
-  return `Heard: "${codeMix.isMixed ? "code-mixed input" : "input"}" — confirm or correct below.`;
+  if (action === "ADD") {
+    if (codeMix.hastelugu) return `${prodName} కి ${qty} ${unitLabel} add చేస్తున్నారు.`;
+    if (codeMix.hasHindi) return `${prodName} mein ${qty} ${unitLabel} joda gaya.`;
+    const newUnits = matchedProduct
+      ? Number(((matchedProduct.quantity + (quantity || 0) * (matchedProduct.tradeUnitSize || 1)) / (matchedProduct.tradeUnitSize || 1)).toFixed(1))
+      : qty;
+    return `${qty} ${unitLabel} of ${prodName} added. You now have ${newUnits} ${unitLabel}.`;
+  }
+
+  if (action === "CHECK" || action === "QUERY") {
+    if (matchedProduct) {
+      const unitsLeft = Number((matchedProduct.quantity / (matchedProduct.tradeUnitSize || 1)).toFixed(1));
+      if (codeMix.hastelugu) return `మీ వద్ద ${unitsLeft} ${unitLabel} ${prodName} ఉంది.`;
+      if (codeMix.hasHindi) return `Aapke paas ${prodName} ${unitsLeft} ${unitLabel} bacha hai.`;
+      return `You have ${unitsLeft} ${unitLabel} of ${prodName} in stock.`;
+    }
+    return `Checking stock in your inventory.`;
+  }
+
+  if (action === "LOW_STOCK_QUERY") {
+    return `Checking items currently running below their reorder safety level.`;
+  }
+
+  if (action === "SALES_QUERY") {
+    return `Calculating sales transaction records for ${prodName}...`;
+  }
+
+  if (action === "REORDER_QUERY") {
+    return `Checking items recommended for purchase based on your reorder levels.`;
+  }
+
+  if (action === "SET_REORDER_LEVEL") {
+    return `Reorder alert for ${prodName} set to ${qty} ${unitLabel}.`;
+  }
+
+  if (action === "REMOVE") {
+    return `Deduct ${qty} ${unitLabel} of ${prodName}.`;
+  }
+
+  return `Heard: "${codeMix.isMixed ? "code-mixed voice command" : "voice command"}" — confirm or review below.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -702,12 +757,19 @@ export function parseVoiceIntent(
 
   // Confidence — boosted for code-mixed because we handle it explicitly
   let confidence = 0.2;
-  if (action !== "UNKNOWN")          confidence += 0.3;
-  if (quantity !== undefined)         confidence += 0.2;
-  if (matchedProduct !== undefined)   confidence += 0.25;
-  if (codeMix.isMixed)                confidence += 0.05; // bonus for code-mix recognition
+  let insufficientStock = undefined;
+  if ((action === "SELL" || action === "REMOVE") && matchedProduct && quantity !== undefined) {
+    const availableUnits = Number((matchedProduct.quantity / tradeUnitSize).toFixed(1));
+    if (quantity > availableUnits) {
+      insufficientStock = {
+        availableTradeUnits: availableUnits,
+        requestedTradeUnits: quantity,
+        unitLabel: TRADE_UNITS[tradeUnit]?.label || tradeUnit,
+      };
+    }
+  }
 
-  const feedbackMessage = buildFeedback(action, quantity, tradeUnit, matchedProduct, codeMix);
+  const feedbackMessage = buildFeedback(action, quantity, tradeUnit, matchedProduct, codeMix, insufficientStock);
 
   return {
     rawText: text,
@@ -717,6 +779,8 @@ export function parseVoiceIntent(
     quantity,
     tradeUnit,
     baseQuantityCalculated,
+    targetThreshold: action === "SET_REORDER_LEVEL" ? quantity : undefined,
+    insufficientStock,
     confidence: Math.min(1, Number(confidence.toFixed(2))),
     language: currentLang,
     feedbackMessage,

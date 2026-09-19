@@ -2,145 +2,316 @@ import { useState, useMemo, useCallback } from "react";
 import { useInventory } from "@/hooks/useInventory";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import type { Product, SortField, SortOrder, LanguageCode, ParsedVoiceIntent } from "@/types/inventory";
-import { parseVoiceIntent, parseCompoundVoiceIntents } from "@/lib/nlpParser";
+import type {
+  Product,
+  LanguageCode,
+  ParsedVoiceIntent,
+  TradeUnitKey,
+} from "@/types/inventory";
+import { parseCompoundVoiceIntents } from "@/lib/nlpParser";
 import { speakText } from "@/lib/speech";
 import { enqueueOfflineAction, type OfflineQueueEntry } from "@/lib/offlineQueue";
+import { TRADE_UNITS } from "@/lib/tradeUnits";
+
+// Components
 import LoginScreen from "@/components/LoginScreen";
-import StatsCards from "@/components/StatsCards";
-import ProductTable from "@/components/ProductTable";
-import ProductFormDialog from "@/components/ProductFormDialog";
-import VoiceMicButton from "@/components/VoiceMicButton";
-import VoiceCommandModal from "@/components/VoiceCommandModal";
-import TransactionHistory from "@/components/TransactionHistory";
+import InventoryDashboard from "@/components/InventoryDashboard";
+import SalesDashboard from "@/components/SalesDashboard";
 import ReorderSuggestions from "@/components/ReorderSuggestions";
+import TransactionHistory from "@/components/TransactionHistory";
+import PersistentVoiceAssistant from "@/components/PersistentVoiceAssistant";
+import VoiceCommandModal from "@/components/VoiceCommandModal";
+import InsufficientStockModal from "@/components/InsufficientStockModal";
+import InitialSetupModal from "@/components/InitialSetupModal";
+import ProductFormDialog from "@/components/ProductFormDialog";
 import OfflineStatusBar from "@/components/OfflineStatusBar";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Package,
-  Plus,
-  Search,
-  LogOut,
+  TrendingUp,
   AlertTriangle,
   History,
-  Mic,
-  Send,
-  Boxes,
-  Sparkles,
   WifiOff,
-  Clock,
-  Trash2,
+  LogOut,
+  RotateCcw,
+  Sparkles,
 } from "lucide-react";
+
+type MainTab = "inventory" | "sales" | "reorder" | "history";
 
 const Dashboard = () => {
   const { user, isAuthenticated, login, logout } = useAuth();
   const {
     products,
     transactions,
+    salesTransactions,
+    reminders,
     addProduct,
     updateProduct,
     deleteProduct,
-    clearAllData,
+    setProductReorderLevel,
     executeVoiceIntent,
-    getLowStockProducts,
-    totalValue,
-    totalItemsCount,
+    lowStockProducts,
+    outOfStockProducts,
     lowStockCount,
+    outOfStockCount,
+    totalItemsCount,
+    todayUpdatesCount,
+    resetToSaiStoreDemo,
+    clearAllData,
   } = useInventory();
 
-  const [activeTab, setActiveTab] = useState<"catalog" | "reorder" | "history">("catalog");
+  const [activeTab, setActiveTab] = useState<MainTab>("inventory");
   const [currentLanguage, setCurrentLanguage] = useState<LanguageCode>("hi-IN");
 
-  const [search, setSearch] = useState("");
-  const [voiceInputText, setVoiceInputText] = useState("");
-  const [sortField, setSortField] = useState<SortField>("id");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
-
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  // Voice & Modals State
   const [activeVoiceIntent, setActiveVoiceIntent] = useState<ParsedVoiceIntent | null>(null);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [insufficientStockIntent, setInsufficientStockIntent] = useState<ParsedVoiceIntent | null>(null);
+  const [showInsufficientModal, setShowInsufficientModal] = useState(false);
+  const [showInitialSetupModal, setShowInitialSetupModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
+  const [lastFeedbackMessage, setLastFeedbackMessage] = useState<string>(
+    "Tap microphone to manage your stock with natural voice."
+  );
   const [offlineQueuedCount, setOfflineQueuedCount] = useState(0);
 
-  // ── Offline sync handler: replay queued actions when internet returns ──────
-  const handleOfflineSync = useCallback((entries: OfflineQueueEntry[]) => {
-    for (const entry of entries) {
-      executeVoiceIntent(entry.intent);
-    }
-    setOfflineQueuedCount(0);
-  }, [executeVoiceIntent]);
+  // Offline sync handler
+  const handleOfflineSync = useCallback(
+    (entries: OfflineQueueEntry[]) => {
+      for (const entry of entries) {
+        executeVoiceIntent(entry.intent);
+      }
+      setOfflineQueuedCount(0);
+      const msg = `Synced ${entries.length} offline actions to inventory.`;
+      setLastFeedbackMessage(msg);
+      speakText(msg, currentLanguage);
+    },
+    [executeVoiceIntent, currentLanguage]
+  );
 
   const { isOnline, wasOffline, isSyncing, pendingCount } = useOnlineStatus(handleOfflineSync);
 
-  const lowStockProducts = getLowStockProducts();
-
-  const displayProducts = useMemo(() => {
-    let list = [...products];
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          p.id.toString().includes(q)
-      );
-    }
-
-    list.sort((a, b) => {
-      let cmp = 0;
-      if (sortField === "price") cmp = a.price - b.price;
-      else if (sortField === "quantity") cmp = a.quantity - b.quantity;
-      else if (sortField === "name") cmp = a.name.localeCompare(b.name);
-      else cmp = a.id - b.id;
-      return sortOrder === "asc" ? cmp : -cmp;
-    });
-
-    return list;
-  }, [products, sortField, sortOrder, search]);
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  };
-
   /**
-   * Process voice input transcript (from Mic or manual text bar).
-   * When offline: enqueues the action and shows a toast-like confirmation.
-   * When online: opens the voice confirmation modal as normal.
+   * Process Voice Transcript from Persistent Voice Assistant or Input
    */
   const handleProcessVoiceInput = (rawText: string) => {
     if (!rawText.trim()) return;
-    const compoundIntents = parseCompoundVoiceIntents(rawText, products, currentLanguage);
 
+    const compoundIntents = parseCompoundVoiceIntents(rawText, products, currentLanguage);
+    if (compoundIntents.length === 0) return;
+
+    const primaryIntent = compoundIntents[0];
+
+    // 1. Guard check: Insufficient Stock
+    if (primaryIntent.insufficientStock) {
+      setInsufficientStockIntent(primaryIntent);
+      setShowInsufficientModal(true);
+      const alertMsg = `Not enough stock. You only have ${primaryIntent.insufficientStock.availableTradeUnits} ${primaryIntent.insufficientStock.unitLabel} of ${primaryIntent.productName || "item"}.`;
+      setLastFeedbackMessage(alertMsg);
+      speakText(alertMsg, currentLanguage);
+      return;
+    }
+
+    // 2. Query Handling (CHECK_STOCK, SALES_QUERY, LOW_STOCK_QUERY, REORDER_QUERY)
+    if (primaryIntent.action === "CHECK" || primaryIntent.action === "QUERY") {
+      let response = primaryIntent.feedbackMessage;
+      if (primaryIntent.matchedProduct) {
+        const p = primaryIntent.matchedProduct;
+        const availableTrade = Number((p.quantity / (p.tradeUnitSize || 1)).toFixed(1));
+        const unitLabel = TRADE_UNITS[p.tradeUnit]?.label || p.tradeUnit;
+        response = `You have ${availableTrade} ${unitLabel} of ${p.name} available in store.`;
+      }
+      setLastFeedbackMessage(response);
+      speakText(response, currentLanguage);
+      return;
+    }
+
+    if (primaryIntent.action === "SALES_QUERY") {
+      setActiveTab("sales");
+      setLastFeedbackMessage(primaryIntent.feedbackMessage);
+      speakText(primaryIntent.feedbackMessage, currentLanguage);
+      return;
+    }
+
+    if (primaryIntent.action === "LOW_STOCK_QUERY") {
+      if (lowStockProducts.length === 0) {
+        const msg = "All stock levels are healthy! No items are currently in shortage.";
+        setLastFeedbackMessage(msg);
+        speakText(msg, currentLanguage);
+      } else {
+        const itemNames = lowStockProducts.map((p) => p.name).join(", ");
+        const msg = `${lowStockProducts.length} items are running low: ${itemNames}.`;
+        setLastFeedbackMessage(msg);
+        speakText(msg, currentLanguage);
+      }
+      return;
+    }
+
+    if (primaryIntent.action === "REORDER_QUERY") {
+      setActiveTab("reorder");
+      const msg = reminders.length > 0
+        ? `You have ${reminders.length} items needing reorder.`
+        : "Reorder list is clear.";
+      setLastFeedbackMessage(msg);
+      speakText(msg, currentLanguage);
+      return;
+    }
+
+    if (primaryIntent.action === "SET_REORDER_LEVEL") {
+      if (primaryIntent.matchedProduct && primaryIntent.targetThreshold !== undefined) {
+        setProductReorderLevel(primaryIntent.matchedProduct.id, primaryIntent.targetThreshold);
+        const msg = `Reorder level for ${primaryIntent.matchedProduct.name} set to ${primaryIntent.targetThreshold} ${TRADE_UNITS[primaryIntent.matchedProduct.tradeUnit]?.label || "units"}.`;
+        setLastFeedbackMessage(msg);
+        speakText(msg, currentLanguage);
+      }
+      return;
+    }
+
+    // 3. Action Execution (ADD, SELL, SET)
     if (!isOnline) {
       for (const intent of compoundIntents) {
         enqueueOfflineAction(intent);
       }
       setOfflineQueuedCount((c) => c + compoundIntents.length);
-      setVoiceInputText("");
-      window.alert(
-        `⏳ Offline: ${compoundIntents.length} action(s) queued for automatic sync!`
-      );
+      const offlineMsg = `Saved ${compoundIntents.length} action(s) offline. Will sync when online.`;
+      setLastFeedbackMessage(offlineMsg);
+      window.alert(offlineMsg);
       return;
     }
 
-    // Process the first parsed intent in confirmation modal (or single intent)
-    setActiveVoiceIntent(compoundIntents[0]);
+    // Direct multi-item compound execution if all matched
+    if (compoundIntents.length > 1) {
+      let count = 0;
+      for (const item of compoundIntents) {
+        if (item.matchedProduct) {
+          executeVoiceIntent(item);
+          count++;
+        }
+      }
+      const compoundSummary = `Processed ${count} items into inventory successfully.`;
+      setLastFeedbackMessage(compoundSummary);
+      speakText(compoundSummary, currentLanguage);
+      return;
+    }
+
+    // Single item intent: show confirmation modal
+    setActiveVoiceIntent(primaryIntent);
     setShowVoiceModal(true);
   };
 
   /**
-   * Quick action sample voice triggers for instant testing
+   * Quick Add Stock (+1 Trade Unit)
    */
-  const handleSampleChipClick = (phrase: string) => {
-    setVoiceInputText(phrase);
-    handleProcessVoiceInput(phrase);
+  const handleQuickAddStock = (product: Product) => {
+    const unitLabel = TRADE_UNITS[product.tradeUnit]?.label || product.tradeUnit;
+    const intent: ParsedVoiceIntent = {
+      rawText: `Add 1 ${unitLabel} ${product.name}`,
+      action: "ADD",
+      matchedProduct: product,
+      productName: product.name,
+      quantity: 1,
+      tradeUnit: product.tradeUnit,
+      baseQuantityCalculated: product.tradeUnitSize,
+      confidence: 1.0,
+      language: currentLanguage,
+      feedbackMessage: `Added 1 ${unitLabel} of ${product.name}.`,
+    };
+    executeVoiceIntent(intent);
+    const msg = `Added 1 ${unitLabel} of ${product.name}.`;
+    setLastFeedbackMessage(msg);
+    speakText(msg, currentLanguage);
+  };
+
+  /**
+   * Quick Sell Stock (-1 Trade Unit) with Out-of-Stock Protection
+   */
+  const handleQuickSellStock = (product: Product) => {
+    const unitLabel = TRADE_UNITS[product.tradeUnit]?.label || product.tradeUnit;
+    const currentTrade = Number((product.quantity / (product.tradeUnitSize || 1)).toFixed(1));
+
+    if (currentTrade < 1) {
+      const guardIntent: ParsedVoiceIntent = {
+        rawText: `Sell 1 ${unitLabel} ${product.name}`,
+        action: "SELL",
+        matchedProduct: product,
+        productName: product.name,
+        quantity: 1,
+        tradeUnit: product.tradeUnit,
+        confidence: 1.0,
+        language: currentLanguage,
+        feedbackMessage: `Not enough stock.`,
+        insufficientStock: {
+          availableTradeUnits: currentTrade,
+          requestedTradeUnits: 1,
+          unitLabel,
+        },
+      };
+      setInsufficientStockIntent(guardIntent);
+      setShowInsufficientModal(true);
+      const alertMsg = `Not enough stock. You have only ${currentTrade} ${unitLabel} of ${product.name}.`;
+      setLastFeedbackMessage(alertMsg);
+      speakText(alertMsg, currentLanguage);
+      return;
+    }
+
+    const intent: ParsedVoiceIntent = {
+      rawText: `Sold 1 ${unitLabel} ${product.name}`,
+      action: "SELL",
+      matchedProduct: product,
+      productName: product.name,
+      quantity: 1,
+      tradeUnit: product.tradeUnit,
+      baseQuantityCalculated: product.tradeUnitSize,
+      confidence: 1.0,
+      language: currentLanguage,
+      feedbackMessage: `Sold 1 ${unitLabel} of ${product.name}.`,
+    };
+    executeVoiceIntent(intent);
+    const msg = `Sold 1 ${unitLabel} of ${product.name}.`;
+    setLastFeedbackMessage(msg);
+    speakText(msg, currentLanguage);
+  };
+
+  /**
+   * Initial Setup Bulk Add
+   */
+  const handleSaveInitialSetup = (
+    items: Array<{
+      name: string;
+      category: string;
+      quantity: number;
+      baseUnit: any;
+      tradeUnit: TradeUnitKey;
+      tradeUnitSize: number;
+      price: number;
+      minStockThreshold: number;
+      reorderQuantity: number;
+    }>
+  ) => {
+    for (const item of items) {
+      addProduct(item);
+    }
+    const msg = `Saved ${items.length} items to Sai General Stores inventory.`;
+    setLastFeedbackMessage(msg);
+    speakText(msg, currentLanguage);
+  };
+
+  /**
+   * Spoken Audio Alerts for Shortages
+   */
+  const handleSpeakShortageAlerts = () => {
+    if (reminders.length === 0) {
+      speakText("All stock is healthy. No items are running low.", currentLanguage);
+      return;
+    }
+    let speech = `Attention: ${reminders.length} items are low on stock. `;
+    reminders.forEach((r) => {
+      speech += `${r.productName} has only ${r.currentTradeUnits} ${r.tradeUnitLabel} remaining. `;
+    });
+    speakText(speech, currentLanguage);
   };
 
   if (!isAuthenticated) {
@@ -148,8 +319,8 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-16">
-      {/* Offline Status Banner — sits above everything */}
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-32">
+      {/* Offline Status Bar Banner */}
       <OfflineStatusBar
         isOnline={isOnline}
         wasOffline={wasOffline}
@@ -157,254 +328,235 @@ const Dashboard = () => {
         pendingCount={pendingCount + offlineQueuedCount}
       />
 
-      {/* Top Navigation Header */}
-      <header className="sticky top-0 z-30 border-b border-emerald-500/20 bg-slate-900/90 backdrop-blur-xl shadow-md">
+      {/* Primary Top Header */}
+      <header className="sticky top-0 z-30 border-b border-emerald-500/20 bg-slate-900/95 backdrop-blur-xl shadow-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-bold shadow-lg shadow-emerald-500/20">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black shadow-lg shadow-emerald-500/20">
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
-                Voice<span className="text-emerald-400">Stock</span> India
-                <span className="text-[10px] uppercase tracking-widest bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 rounded-full ml-1">
-                  v2.0 Regional
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
+                  Voice<span className="text-emerald-400">Stock</span> AI
                 </span>
-              </span>
-              <p className="text-[11px] text-muted-foreground hidden sm:block">
-                Voice-First Inventory Management for Small Businesses & Kiranas
+                <span className="text-[10px] uppercase tracking-widest bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 rounded-full hidden sm:inline-block">
+                  Kirana Voice Edition
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                "Speak your business. Manage your stock."
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Offline / Online indicator pill */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {!isOnline ? (
-              <div className="hidden md:flex items-center gap-1.5 bg-red-950/60 border border-red-500/30 px-3 py-1.5 rounded-xl text-xs">
+              <div className="flex items-center gap-1.5 bg-red-950/60 border border-red-500/30 px-2.5 py-1 rounded-xl text-xs">
                 <WifiOff className="h-3.5 w-3.5 text-red-400" />
-                <span className="text-red-300 font-bold">Offline</span>
-                {(pendingCount + offlineQueuedCount) > 0 && (
-                  <span className="ml-1 bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold">
-                    {pendingCount + offlineQueuedCount} pending
-                  </span>
-                )}
+                <span className="text-red-300 font-bold text-[11px]">Offline Mode</span>
               </div>
             ) : (
-              <div className="hidden md:flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-xl border border-border/50 text-xs">
+              <div className="hidden md:flex items-center gap-2 bg-slate-800/60 px-3 py-1 rounded-xl border border-border/50 text-xs">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-muted-foreground">User:</span>
-                <span className="font-mono font-bold text-foreground">{user}</span>
+                <span className="text-muted-foreground">Store:</span>
+                <span className="font-bold text-white">Sai General Stores</span>
               </div>
             )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetToSaiStoreDemo}
+              className="text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 h-8"
+              title="Reset stock to original demo numbers"
+            >
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Reset Demo</span>
+            </Button>
+
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                if (window.confirm("Are you sure you want to delete all inventory items and clear all data? This cannot be undone.")) {
-                  clearAllData();
-                }
-              }}
-              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
-              title="Clear all products and inventory data"
+              onClick={logout}
+              className="text-muted-foreground hover:text-white text-xs h-8"
             >
-              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-              Clear Data
-            </Button>
-            <Button variant="ghost" size="sm" onClick={logout} className="text-muted-foreground hover:text-white text-xs">
-              <LogOut className="mr-1.5 h-4 w-4" />
-              Logout
+              <LogOut className="mr-1 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
-      </header>
 
-      {/* Main Content Body */}
-      <main className="mx-auto max-w-7xl p-4 space-y-6">
-        {/* Voice Assistant Microphone Hero Section */}
-        <section className="animate-fade-in space-y-3">
-          <VoiceMicButton
-            currentLanguage={currentLanguage}
-            onLanguageChange={setCurrentLanguage}
-            isOnline={isOnline}
-            onTranscriptReceived={(transcript, isFinal) => {
-              setVoiceInputText(transcript);
-              if (isFinal) {
-                handleProcessVoiceInput(transcript);
-              }
-            }}
-          />
-
-          {/* Quick Voice Command Sample Chips */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1 text-xs">
-            <span className="text-muted-foreground text-[11px] font-semibold flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-emerald-400" /> Try Speaking:
-            </span>
+        {/* Tab Navigation Ribbon */}
+        <div className="border-t border-border/40 bg-slate-950/60 px-4">
+          <div className="mx-auto max-w-7xl flex items-center gap-1 overflow-x-auto py-1 text-xs">
+            {/* Inventory Tab */}
             <button
-              onClick={() => handleSampleChipClick("Add 5 bags Basmati Rice")}
-              className="rounded-full bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 px-3 py-1 text-emerald-300 font-medium transition-colors"
-            >
-              "Add 5 bags Basmati Rice"
-            </button>
-            <button
-              onClick={() => handleSampleChipClick("5 borii chawal aayi")}
-              className="rounded-full bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 px-3 py-1 text-emerald-300 font-medium transition-colors"
-            >
-              "5 borii chawal aayi"
-            </button>
-            <button
-              onClick={() => handleSampleChipClick("Sold 2 dozen Lux soap")}
-              className="rounded-full bg-slate-900 hover:bg-slate-800 border border-rose-500/30 px-3 py-1 text-rose-300 font-medium transition-colors"
-            >
-              "Sold 2 dozen Lux soap"
-            </button>
-            <button
-              onClick={() => handleSampleChipClick("Chawal kitna bacha hai?")}
-              className="rounded-full bg-slate-900 hover:bg-slate-800 border border-blue-500/30 px-3 py-1 text-blue-300 font-medium transition-colors"
-            >
-              "Chawal kitna bacha hai?"
-            </button>
-          </div>
-        </section>
-
-        {/* Text Voice Command Bar (Manual Fallback Input) */}
-        <div className="flex items-center gap-2 bg-slate-900 border border-emerald-500/20 p-2 rounded-2xl shadow-md max-w-3xl mx-auto">
-          <Mic className="h-4 w-4 text-emerald-400 ml-2 shrink-0" />
-          <Input
-            value={voiceInputText}
-            onChange={(e) => setVoiceInputText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleProcessVoiceInput(voiceInputText);
-            }}
-            placeholder="Or type voice command manually (e.g., 'Add 3 cartons Fortune Oil')..."
-            className="bg-transparent border-none text-sm text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/60"
-          />
-          <Button
-            size="sm"
-            onClick={() => handleProcessVoiceInput(voiceInputText)}
-            className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold shrink-0"
-          >
-            <Send className="h-3.5 w-3.5 mr-1" /> Parse Action
-          </Button>
-        </div>
-
-        {/* Key Metrics Stats Cards */}
-        <StatsCards
-          productCount={totalItemsCount}
-          totalValue={totalValue}
-          totalItems={products.reduce((acc, p) => acc + p.quantity, 0)}
-          lowStockCount={lowStockCount}
-        />
-
-        {/* Tab Navigation Controls */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-border/60 pb-3">
-          <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-border/60 w-full sm:w-auto">
-            <button
-              onClick={() => setActiveTab("catalog")}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                activeTab === "catalog"
-                  ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
+              onClick={() => setActiveTab("inventory")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+                activeTab === "inventory"
+                  ? "bg-emerald-500 text-slate-950 shadow-md"
+                  : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
-              <Boxes className="h-4 w-4" />
-              Inventory Catalog ({products.length})
+              <Package className="h-4 w-4" />
+              📦 Inventory Dashboard
+              <span
+                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                  activeTab === "inventory"
+                    ? "bg-slate-950 text-emerald-400"
+                    : "bg-slate-800 text-slate-300"
+                }`}
+              >
+                {totalItemsCount}
+              </span>
             </button>
 
+            {/* Sales Tab */}
+            <button
+              onClick={() => setActiveTab("sales")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+                activeTab === "sales"
+                  ? "bg-indigo-600 text-white shadow-md"
+                  : "text-muted-foreground hover:text-white hover:bg-slate-900"
+              }`}
+            >
+              <TrendingUp className="h-4 w-4" />
+              📊 Sales Dashboard
+              <span
+                className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                  activeTab === "sales"
+                    ? "bg-white text-indigo-700"
+                    : "bg-slate-800 text-slate-300"
+                }`}
+              >
+                {salesTransactions.length}
+              </span>
+            </button>
+
+            {/* Reorder Hub Tab */}
             <button
               onClick={() => setActiveTab("reorder")}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all relative ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "reorder"
-                  ? "bg-gradient-to-r from-amber-500 to-orange-600 text-slate-950 shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-amber-500 text-slate-950 shadow-md"
+                  : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
               <AlertTriangle className="h-4 w-4" />
-              Reorder Hub
+              ⚡ Reorder & Shortages
               {lowStockCount > 0 && (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-extrabold animate-pulse">
                   {lowStockCount}
                 </span>
               )}
             </button>
 
+            {/* Activity History Tab */}
             <button
               onClick={() => setActiveTab("history")}
-              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "history"
-                  ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-slate-800 text-white shadow-md"
+                  : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
               <History className="h-4 w-4" />
-              Voice Transaction Feed ({transactions.length})
+              🕒 Voice Activity Log ({transactions.length})
             </button>
           </div>
-
-          {/* Action Toolbar */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {activeTab === "catalog" && (
-              <div className="relative flex-1 sm:w-64">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Filter catalog..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 h-9 bg-slate-900 border-border text-xs"
-                />
-              </div>
-            )}
-
-            <Button
-              size="sm"
-              onClick={() => setShowAddModal(true)}
-              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shrink-0"
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              Add Product
-            </Button>
-          </div>
         </div>
+      </header>
 
-        {/* Tab Content Display */}
-        {activeTab === "catalog" && (
-          <ProductTable
-            products={displayProducts}
-            sortField={sortField}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-            onEdit={setEditProduct}
-            onDelete={deleteProduct}
+      {/* Main Content Area */}
+      <main className="mx-auto max-w-7xl p-4 md:p-6 space-y-6">
+        {/* Tab: Inventory Dashboard */}
+        {activeTab === "inventory" && (
+          <InventoryDashboard
+            products={products}
+            reminders={reminders}
+            lowStockCount={lowStockCount}
+            outOfStockCount={outOfStockCount}
+            totalItemsCount={totalItemsCount}
+            todayUpdatesCount={todayUpdatesCount}
+            onOpenInitialSetup={() => setShowInitialSetupModal(true)}
+            onOpenAddProduct={() => setShowAddModal(true)}
+            onEditProduct={setEditProduct}
+            onDeleteProduct={deleteProduct}
+            onQuickAddStock={handleQuickAddStock}
+            onQuickSellStock={handleQuickSellStock}
+            onResetDemo={resetToSaiStoreDemo}
+            onSpeakAlerts={handleSpeakShortageAlerts}
           />
         )}
 
+        {/* Tab: Sales Dashboard */}
+        {activeTab === "sales" && (
+          <SalesDashboard
+            transactions={transactions}
+            products={products}
+            lowStockCount={lowStockCount}
+            onSpeakText={(text) => {
+              setLastFeedbackMessage(text);
+              speakText(text, currentLanguage);
+            }}
+          />
+        )}
+
+        {/* Tab: Reorder Hub */}
         {activeTab === "reorder" && (
           <ReorderSuggestions
             lowStockProducts={lowStockProducts}
-            onSpeakSummary={(text) => speakText(text, currentLanguage)}
+            onSpeakSummary={(text) => {
+              setLastFeedbackMessage(text);
+              speakText(text, currentLanguage);
+            }}
           />
         )}
 
+        {/* Tab: Transaction History Log */}
         {activeTab === "history" && (
           <TransactionHistory transactions={transactions} />
         )}
       </main>
 
-      {/* Product Create Dialog */}
-      <ProductFormDialog
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSubmit={(data) => addProduct(data)}
+      {/* Persistent Voice Assistant Bar (Floating at Bottom of All Screens) */}
+      <PersistentVoiceAssistant
+        currentLanguage={currentLanguage}
+        onLanguageChange={setCurrentLanguage}
+        isOnline={isOnline}
+        onProcessTranscript={handleProcessVoiceInput}
+        lastFeedbackMessage={lastFeedbackMessage}
+        onSpeakText={(text) => speakText(text, currentLanguage)}
       />
 
-      {/* Product Edit Dialog */}
-      {editProduct && (
-        <ProductFormDialog
-          open={!!editProduct}
-          onClose={() => setEditProduct(null)}
-          product={editProduct}
-          onSubmit={(data) => updateProduct(editProduct.id, data)}
-        />
-      )}
+      {/* Out-of-Stock Guard Modal */}
+      <InsufficientStockModal
+        open={showInsufficientModal}
+        intent={insufficientStockIntent}
+        onClose={() => setShowInsufficientModal(false)}
+        onConfirmAdjusted={(adjustedIntent) => {
+          executeVoiceIntent(adjustedIntent);
+          setLastFeedbackMessage(adjustedIntent.feedbackMessage);
+          speakText(adjustedIntent.feedbackMessage, currentLanguage);
+        }}
+      />
+
+      {/* Initial Store Stock Setup Wizard Modal */}
+      <InitialSetupModal
+        open={showInitialSetupModal}
+        existingProducts={products}
+        currentLanguage={currentLanguage}
+        onClose={() => setShowInitialSetupModal(false)}
+        onSaveSetup={handleSaveInitialSetup}
+        onResetDemo={() => {
+          resetToSaiStoreDemo();
+          setShowInitialSetupModal(false);
+          const msg = "Loaded Sai General Stores demo catalog!";
+          setLastFeedbackMessage(msg);
+          speakText(msg, currentLanguage);
+        }}
+      />
 
       {/* Voice Action Confirmation Modal */}
       <VoiceCommandModal
@@ -415,10 +567,38 @@ const Dashboard = () => {
         onCreateProduct={(data) => addProduct(data)}
         onConfirm={(finalIntent) => {
           executeVoiceIntent(finalIntent);
-          setVoiceInputText("");
+          setLastFeedbackMessage(finalIntent.feedbackMessage);
+          speakText(finalIntent.feedbackMessage, currentLanguage);
         }}
         onSpeakResponse={(text) => speakText(text, currentLanguage)}
       />
+
+      {/* Manual Product Create Modal */}
+      <ProductFormDialog
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSubmit={(data) => {
+          addProduct(data);
+          const msg = `Added ${data.name} to inventory.`;
+          setLastFeedbackMessage(msg);
+          speakText(msg, currentLanguage);
+        }}
+      />
+
+      {/* Manual Product Edit Modal */}
+      {editProduct && (
+        <ProductFormDialog
+          open={!!editProduct}
+          onClose={() => setEditProduct(null)}
+          product={editProduct}
+          onSubmit={(data) => {
+            updateProduct(editProduct.id, data);
+            const msg = `Updated details for ${editProduct.name}.`;
+            setLastFeedbackMessage(msg);
+            speakText(msg, currentLanguage);
+          }}
+        />
+      )}
     </div>
   );
 };
