@@ -1,0 +1,56 @@
+{
+  "categories": [
+    {
+      "id": "ELEC",
+      "name": "Electronics"
+    },
+    {
+      "id": "GROC",
+      "name": "Groceries"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "SUP-01",
+      "name": "Northwave Traders",
+      "email": "orders@northwave.example"
+    },
+    {
+      "id": "SUP-02",
+      "name": "FreshRoute",
+      "email": "sales@freshroute.example"
+    }
+  ],
+  "products": [
+    {
+      "sku": "SKU-1001",
+      "name": "Wireless Mouse",
+      "category_id": "ELEC",
+      "supplier_id": "SUP-01",
+      "reorder_threshold": 10,
+      "quantity": 37,
+      "type": "standard",
+      "shelf_life_days": null
+    },
+    {
+      "sku": "SKU-2001",
+      "name": "Organic Milk",
+      "category_id": "GROC",
+      "supplier_id": "SUP-02",
+      "reorder_threshold": 25,
+      "quantity": 18,
+      "type": "perishable",
+      "shelf_life_days": 14
+    },
+    {
+      "sku": "SKU-1002",
+      "name": "USB-C Cable",
+      "category_id": "ELEC",
+      "supplier_id": "SUP-01",
+      "reorder_threshold": 15,
+      "quantity": 24,
+      "type": "standard",
+      "shelf_life_days": null
+    }
+  ]
+}
