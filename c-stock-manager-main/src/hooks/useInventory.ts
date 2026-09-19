@@ -110,22 +110,45 @@ export function useInventory() {
       const unitSize = target.tradeUnitSize || 1;
       const baseQtyChange = tradeQty * unitSize;
 
-      let newBaseQty = target.quantity;
       let txType: "ADD" | "REMOVE" | "SET" = "ADD";
 
-      if (intent.action === "ADD") {
-        newBaseQty = target.quantity + baseQtyChange;
-        txType = "ADD";
-      } else if (intent.action === "REMOVE") {
-        newBaseQty = Math.max(0, target.quantity - baseQtyChange);
-        txType = "REMOVE";
-      } else if (intent.action === "SET") {
-        newBaseQty = baseQtyChange;
-        txType = "SET";
-      }
+      if (intent.action === "ADD") txType = "ADD";
+      else if (intent.action === "REMOVE") txType = "REMOVE";
+      else if (intent.action === "SET") txType = "SET";
 
-      // Update product quantity
-      updateProduct(target.id, { quantity: newBaseQty });
+      setProducts((prev) => {
+        const existingIndex = prev.findIndex((p) => p.id === target.id);
+        let currentBaseQty = target.quantity;
+
+        if (existingIndex >= 0) {
+          currentBaseQty = prev[existingIndex].quantity;
+        }
+
+        let newBaseQty = currentBaseQty;
+        if (txType === "ADD") {
+          newBaseQty = currentBaseQty + baseQtyChange;
+        } else if (txType === "REMOVE") {
+          newBaseQty = Math.max(0, currentBaseQty - baseQtyChange);
+        } else if (txType === "SET") {
+          newBaseQty = baseQtyChange;
+        }
+
+        if (existingIndex >= 0) {
+          return prev.map((p, idx) =>
+            idx === existingIndex
+              ? { ...p, quantity: newBaseQty, updatedAt: new Date().toISOString() }
+              : p
+          );
+        } else {
+          // Add brand new product directly with calculated quantity
+          const newProduct: Product = {
+            ...target,
+            quantity: newBaseQty,
+            createdAt: target.createdAt || new Date().toISOString(),
+          };
+          return [newProduct, ...prev];
+        }
+      });
 
       // Log audit transaction
       const tx: Transaction = {
@@ -143,7 +166,7 @@ export function useInventory() {
 
       setTransactions((prev) => [tx, ...prev]);
     },
-    [updateProduct]
+    []
   );
 
   const getLowStockProducts = useCallback(() => {
