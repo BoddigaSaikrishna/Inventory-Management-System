@@ -319,7 +319,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-32">
+    <div className="min-h-screen bg-slate-950 text-slate-50 font-sans pb-36 sm:pb-32">
       {/* Offline Status Bar Banner */}
       <OfflineStatusBar
         isOnline={isOnline}
@@ -330,31 +330,31 @@ const Dashboard = () => {
 
       {/* Primary Top Header */}
       <header className="sticky top-0 z-30 border-b border-emerald-500/20 bg-slate-900/95 backdrop-blur-xl shadow-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black shadow-lg shadow-emerald-500/20">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-4">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-slate-950 font-black shadow-lg shadow-emerald-500/20 shrink-0">
               <Package className="h-5 w-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-1">
                   Voice<span className="text-emerald-400">Stock</span> AI
                 </span>
-                <span className="text-[10px] uppercase tracking-widest bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 rounded-full hidden sm:inline-block">
+                <span className="text-[9px] sm:text-[10px] uppercase tracking-widest bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-bold px-2 py-0.5 rounded-full hidden sm:inline-block">
                   Kirana Voice Edition
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 hidden sm:block">
                 "Speak your business. Manage your stock."
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {!isOnline ? (
-              <div className="flex items-center gap-1.5 bg-red-950/60 border border-red-500/30 px-2.5 py-1 rounded-xl text-xs">
-                <WifiOff className="h-3.5 w-3.5 text-red-400" />
-                <span className="text-red-300 font-bold text-[11px]">Offline Mode</span>
+              <div className="flex items-center gap-1 bg-red-950/60 border border-red-500/30 px-2 py-0.5 rounded-xl text-xs">
+                <WifiOff className="h-3 w-3 text-red-400" />
+                <span className="text-red-300 font-bold text-[10px]">Offline</span>
               </div>
             ) : (
               <div className="hidden md:flex items-center gap-2 bg-slate-800/60 px-3 py-1 rounded-xl border border-border/50 text-xs">
@@ -368,18 +368,19 @@ const Dashboard = () => {
               variant="outline"
               size="sm"
               onClick={resetToSaiStoreDemo}
-              className="text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 h-8"
+              className="text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 h-8 px-2.5 sm:px-3"
               title="Reset stock to original demo numbers"
             >
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               <span className="hidden sm:inline">Reset Demo</span>
+              <span className="sm:hidden text-[11px]">Reset</span>
             </Button>
 
             <Button
               variant="ghost"
               size="sm"
               onClick={logout}
-              className="text-muted-foreground hover:text-white text-xs h-8"
+              className="text-muted-foreground hover:text-white text-xs h-8 px-2 sm:px-3"
             >
               <LogOut className="mr-1 h-3.5 w-3.5" />
               <span className="hidden sm:inline">Logout</span>
@@ -388,19 +389,19 @@ const Dashboard = () => {
         </div>
 
         {/* Tab Navigation Ribbon */}
-        <div className="border-t border-border/40 bg-slate-950/60 px-4">
-          <div className="mx-auto max-w-7xl flex items-center gap-1 overflow-x-auto py-1 text-xs">
+        <div className="border-t border-border/40 bg-slate-950/60 px-2 sm:px-4">
+          <div className="mx-auto max-w-7xl flex items-center gap-1 overflow-x-auto py-1 text-xs no-scrollbar">
             {/* Inventory Tab */}
             <button
               onClick={() => setActiveTab("inventory")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "inventory"
                   ? "bg-emerald-500 text-slate-950 shadow-md"
                   : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
-              <Package className="h-4 w-4" />
-              📦 Inventory Dashboard
+              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>📦 <span className="hidden sm:inline">Inventory</span> Dashboard</span>
               <span
                 className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
                   activeTab === "inventory"
@@ -415,14 +416,14 @@ const Dashboard = () => {
             {/* Sales Tab */}
             <button
               onClick={() => setActiveTab("sales")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "sales"
                   ? "bg-indigo-600 text-white shadow-md"
                   : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
-              <TrendingUp className="h-4 w-4" />
-              📊 Sales Dashboard
+              <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>📊 <span className="hidden sm:inline">Sales</span> Dashboard</span>
               <span
                 className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
                   activeTab === "sales"
@@ -437,14 +438,14 @@ const Dashboard = () => {
             {/* Reorder Hub Tab */}
             <button
               onClick={() => setActiveTab("reorder")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "reorder"
                   ? "bg-amber-500 text-slate-950 shadow-md"
                   : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
-              <AlertTriangle className="h-4 w-4" />
-              ⚡ Reorder & Shortages
+              <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>⚡ Reorder<span className="hidden sm:inline"> & Shortages</span></span>
               {lowStockCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-extrabold animate-pulse">
                   {lowStockCount}
@@ -455,14 +456,17 @@ const Dashboard = () => {
             {/* Activity History Tab */}
             <button
               onClick={() => setActiveTab("history")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all shrink-0 ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-bold transition-all shrink-0 ${
                 activeTab === "history"
                   ? "bg-slate-800 text-white shadow-md"
                   : "text-muted-foreground hover:text-white hover:bg-slate-900"
               }`}
             >
-              <History className="h-4 w-4" />
-              🕒 Voice Activity Log ({transactions.length})
+              <History className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+              <span>🕒 <span className="hidden sm:inline">Voice </span>Log</span>
+              <span className="ml-1 text-[10px] text-slate-400 font-normal hidden sm:inline">
+                ({transactions.length})
+              </span>
             </button>
           </div>
         </div>

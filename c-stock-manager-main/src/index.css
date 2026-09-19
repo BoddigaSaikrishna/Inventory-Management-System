@@ -127,3 +127,13 @@
   0%, 100% { box-shadow: 0 0 20px -5px hsl(38 92% 50% / 0.2); }
   50% { box-shadow: 0 0 30px -5px hsl(38 92% 50% / 0.4); }
 }
+
+/* Hide scrollbar utility for mobile touch scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
