@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Edit3, Volume2, AlertCircle, Package, ArrowRight } from "lucide-react";
+import { Check, Edit3, Volume2, AlertCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ interface VoiceCommandModalProps {
   products: Product[];
   onClose: () => void;
   onConfirm: (finalIntent: ParsedVoiceIntent) => void;
+  onCreateProduct?: (data: Omit<Product, "id" | "createdAt">) => Product;
   onSpeakResponse: (text: string) => void;
 }
 
@@ -28,58 +29,84 @@ const VoiceCommandModal = ({
   products,
   onClose,
   onConfirm,
+  onCreateProduct,
   onSpeakResponse,
 }: VoiceCommandModalProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [action, setAction] = useState<ActionType>("ADD");
-  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [newProductName, setNewProductName] = useState<string>("");
+  const [newProductCategory, setNewProductCategory] = useState<string>("Groceries");
   const [quantity, setQuantity] = useState<string>("");
   const [tradeUnit, setTradeUnit] = useState<TradeUnitKey>("bag");
   const [rawText, setRawText] = useState<string>("");
 
-  const noProductMatched = !intent?.matchedProduct;
-
   useEffect(() => {
     if (intent) {
       setAction(intent.action !== "UNKNOWN" ? intent.action : "ADD");
-      // IMPORTANT: Do NOT default to products[0] when no product matched —
-      // that causes the Basmati Rice default bug. Leave null so user must pick.
-      setSelectedProductId(intent.matchedProduct ? intent.matchedProduct.id : null);
       setQuantity(intent.quantity ? intent.quantity.toString() : "1");
       setTradeUnit(intent.tradeUnit || (intent.matchedProduct?.tradeUnit ?? "bag"));
       setRawText(intent.rawText);
-      // Force editing mode open when no product was recognized
-      setIsEditing(!intent.matchedProduct);
+
+      if (intent.matchedProduct) {
+        setSelectedProductId(intent.matchedProduct.id.toString());
+        setIsEditing(false);
+      } else {
+        // Product missing: default to "create new" with the extracted candidate name
+        setSelectedProductId("NEW_PRODUCT");
+        setNewProductName(intent.productName || "Spoken Product");
+        setIsEditing(true);
+      }
     }
   }, [intent, products]);
 
   if (!intent) return null;
 
-  // Never fall back to products[0] — only use what the user explicitly selected or what NLP matched
-  const selectedProduct = products.find((p) => p.id === selectedProductId) ?? intent.matchedProduct ?? null;
+  const isCreatingNew = selectedProductId === "NEW_PRODUCT";
+  const existingProduct = products.find((p) => p.id.toString() === selectedProductId);
 
   const handleConfirm = () => {
-    // Block execution if no product is selected
-    if (!selectedProduct) return;
+    let targetProduct: Product | undefined = existingProduct;
+
+    // Create product on the fly if needed
+    if (isCreatingNew && onCreateProduct) {
+      const nameToUse = newProductName.trim() || intent.productName || "New Spoken Product";
+      const unitSize = TRADE_UNITS[tradeUnit]?.defaultMultiplier ?? 1;
+      const baseUnit = TRADE_UNITS[tradeUnit]?.baseUnit ?? "kg";
+
+      targetProduct = onCreateProduct({
+        name: nameToUse,
+        category: newProductCategory,
+        quantity: 0,
+        baseUnit,
+        tradeUnit,
+        tradeUnitSize: unitSize,
+        price: 100,
+        minStockThreshold: 10 * unitSize,
+        reorderQuantity: 5,
+      });
+    }
+
+    if (!targetProduct) return;
 
     const qtyNum = parseFloat(quantity) || 1;
-    const unitSize = selectedProduct.tradeUnitSize ?? 1;
+    const unitSize = targetProduct.tradeUnitSize ?? 1;
     const baseQty = qtyNum * unitSize;
 
-    const unitLabel = TRADE_UNITS[tradeUnit]?.hindiLabel.split(" ")[0] || tradeUnit;
-    const prodName = selectedProduct.name;
+    const unitLabel = TRADE_UNITS[tradeUnit]?.label || tradeUnit;
+    const prodName = targetProduct.name;
 
     let feedback = "";
-    if (action === "ADD") feedback = `${qtyNum} ${unitLabel} ${prodName} added to stock.`;
-    else if (action === "REMOVE") feedback = `${qtyNum} ${unitLabel} ${prodName} deducted from stock.`;
+    if (action === "ADD") feedback = `${qtyNum} ${unitLabel} of ${prodName} added to inventory.`;
+    else if (action === "REMOVE") feedback = `${qtyNum} ${unitLabel} of ${prodName} deducted from inventory.`;
     else if (action === "SET") feedback = `${prodName} stock set to ${qtyNum} ${unitLabel}.`;
     else feedback = `Confirmed action on ${prodName}.`;
 
     const finalIntent: ParsedVoiceIntent = {
       rawText: rawText || intent.rawText,
       action,
-      matchedProduct: selectedProduct,
-      productName: selectedProduct.name,
+      matchedProduct: targetProduct,
+      productName: targetProduct.name,
       quantity: qtyNum,
       tradeUnit,
       baseQuantityCalculated: baseQty,
@@ -123,7 +150,7 @@ const VoiceCommandModal = ({
         </div>
 
         {/* Parsed Summary Card */}
-        {!isEditing ? (
+        {!isEditing && existingProduct ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-xl bg-emerald-950/30 border border-emerald-500/20 p-4">
               <div className="space-y-1">
@@ -135,13 +162,10 @@ const VoiceCommandModal = ({
                   {action === "ADD" ? "➕ ADD STOCK" : action === "REMOVE" ? "➖ REMOVE STOCK" : "⚙️ SET STOCK"}
                 </span>
                 <p className="text-lg font-bold text-foreground mt-1">
-                  {selectedProduct?.name || "Product"}
+                  {existingProduct.name}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Trade Unit: <span className="font-semibold text-emerald-300">{quantity} {TRADE_UNITS[tradeUnit]?.label}</span>
-                  {selectedProduct && selectedProduct.tradeUnitSize > 1 && (
-                    <span> ({parseFloat(quantity) * selectedProduct.tradeUnitSize} {selectedProduct.baseUnit})</span>
-                  )}
                 </p>
               </div>
 
@@ -162,8 +186,7 @@ const VoiceCommandModal = ({
               </Button>
               <Button
                 onClick={handleConfirm}
-                disabled={!selectedProduct}
-                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold"
               >
                 <Check className="mr-1.5 h-4 w-4" />
                 Confirm & Execute
@@ -171,15 +194,13 @@ const VoiceCommandModal = ({
             </div>
           </div>
         ) : (
-          /* Editable Form — shown automatically when product could not be identified */
+          /* Editable Form */
           <div className="space-y-3 pt-1">
-
-            {/* Amber banner when no product was auto-matched */}
-            {noProductMatched && (
+            {!intent.matchedProduct && (
               <div className="flex items-start gap-2 rounded-xl bg-amber-950/40 border border-amber-500/30 px-3 py-2.5 text-xs text-amber-300">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
                 <span>
-                  <strong>Product not recognized from speech.</strong> Please select the correct product from the dropdown below.
+                  <strong>New Product Spoken:</strong> Item not found in catalog. You can create it instantly below!
                 </span>
               </div>
             )}
@@ -199,29 +220,52 @@ const VoiceCommandModal = ({
               </div>
 
               <div className="space-y-1">
-                <Label className={`text-xs font-semibold ${!selectedProductId ? "text-amber-400" : "text-muted-foreground"}`}>
-                  {!selectedProductId ? "⚠️ Select Product (Required)" : "Select Product"}
-                </Label>
+                <Label className="text-xs text-muted-foreground">Target Product</Label>
                 <select
-                  value={selectedProductId ?? ""}
-                  onChange={(e) => setSelectedProductId(Number(e.target.value))}
-                  className={`w-full h-9 rounded-md border px-2.5 text-xs text-foreground bg-slate-950 ${
-                    !selectedProductId
-                      ? "border-amber-500/60 ring-1 ring-amber-500/40"
-                      : "border-border"
-                  }`}
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="w-full h-9 rounded-md border border-emerald-500/50 bg-slate-950 px-2.5 text-xs text-emerald-300 font-semibold"
                 >
-                  <option value="" disabled>
-                    — Select a product —
+                  <option value="NEW_PRODUCT">
+                    ✨ + Add As New Product
                   </option>
                   {products.map((p) => (
-                    <option key={p.id} value={p.id}>
+                    <option key={p.id} value={p.id.toString()}>
                       {p.name}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+
+            {/* Inline New Product Name Input when creating new item */}
+            {isCreatingNew && (
+              <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30">
+                <div className="space-y-1">
+                  <Label className="text-xs text-emerald-300 font-semibold">New Product Name</Label>
+                  <Input
+                    value={newProductName}
+                    onChange={(e) => setNewProductName(e.target.value)}
+                    placeholder="e.g. Basmati Rice"
+                    className="bg-slate-950 border-emerald-500/40 text-foreground h-9 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-emerald-300 font-semibold">Category</Label>
+                  <select
+                    value={newProductCategory}
+                    onChange={(e) => setNewProductCategory(e.target.value)}
+                    className="w-full h-9 rounded-md border border-emerald-500/40 bg-slate-950 px-2.5 text-xs text-foreground"
+                  >
+                    <option value="Groceries">Groceries / Grains</option>
+                    <option value="Atta & Flour">Atta & Flour</option>
+                    <option value="Oils & Ghee">Oils & Ghee</option>
+                    <option value="Personal Care">Personal Care</option>
+                    <option value="General Goods">General Goods</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
@@ -258,11 +302,19 @@ const VoiceCommandModal = ({
               <Button
                 size="sm"
                 onClick={handleConfirm}
-                disabled={!selectedProductId}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold"
               >
-                <Check className="mr-1 h-3.5 w-3.5" />
-                {selectedProductId ? "Save & Execute" : "Select Product First"}
+                {isCreatingNew ? (
+                  <>
+                    <Plus className="mr-1 h-4 w-4" />
+                    Create & Execute
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-1 h-4 w-4" />
+                    Save & Execute
+                  </>
+                )}
               </Button>
             </div>
           </div>

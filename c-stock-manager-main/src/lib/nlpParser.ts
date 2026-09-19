@@ -455,6 +455,72 @@ function buildFeedback(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PHONETIC SCRIPT NORMALIZATION (Telugu/Hindi STT -> English/Latin Transliteration)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PHONETIC_TRANSCRIPTIONS: Record<string, string> = {
+  // Telugu STT -> English
+  "యాడ్": "add", "ఆడ్": "add", "ఏడ్": "add", "యాడ్స్": "add",
+  "చెక్": "check", "చేయి": "cheyyi", "చేయండి": "cheyyi",
+  "రైస్": "rice", "రాఇస్": "rice", "రైసు": "rice", "బాస్మతి": "basmati",
+  "చావల్": "chawal", "బాస్మతిరైస్": "basmati rice",
+  "షుగర్": "sugar", "షూగర్": "sugar", "సుగర్": "sugar", "చక్కెర": "sugar",
+  "ఆయిల్": "oil", "నూనె": "nune", "సబ్బు": "soap", "సాల్ట్": "salt", "ఉప్పు": "uppu",
+  "ఆటా": "atta", "గోధుమ": "atta", "పప్పు": "dal", "దాల్": "dal",
+  "కేజీ": "kg", "కేజీలు": "kg", "కెజి": "kg",
+  "బ్యాగ్": "bag", "బ్యాగ్స్": "bag", "బ్యాక్": "bag", "బోరి": "bori",
+  "కార్టన్": "carton", "కార్టన్లు": "carton",
+  "లీటర్": "litre", "లీటర్లు": "litre",
+  "డజన్": "dozen", "ఆఫ్": "of",
+  // Hindi STT -> English
+  "ऐड": "add", "चेक": "check", "करो": "karo",
+  "राइस": "rice", "चावल": "chawal", "शुगर": "sugar", "चीनी": "sugar",
+  "ऑयल": "oil", "तेल": "tel", "साबुन": "soap", "नमक": "salt",
+  "आटा": "atta", "दाल": "dal", "केजी": "kg", "बैग": "bag", "बोरी": "bori",
+  "कार्टन": "carton", "लीटर": "litre", "दर्जन": "dozen"
+};
+
+function normalizePhoneticScript(text: string): string {
+  let normalized = text;
+  for (const [scriptWord, latinWord] of Object.entries(PHONETIC_TRANSCRIPTIONS)) {
+    normalized = normalized.split(scriptWord).join(latinWord);
+  }
+  return normalized;
+}
+
+function extractCandidateProductName(text: string): string {
+  const lower = normalizePhoneticScript(text.toLowerCase());
+
+  for (const group of PRODUCT_CATALOG_ALIASES) {
+    for (const alias of group.aliases) {
+      if (lower.includes(alias.toLowerCase())) {
+        if (group.tags.includes("rice")) return "Basmati Rice";
+        if (group.tags.includes("oil")) return "Sunflower Oil";
+        if (group.tags.includes("sugar")) return "Sugar";
+        if (group.tags.includes("soap")) return "Bath Soap";
+        if (group.tags.includes("atta")) return "Aashirvaad Atta";
+        if (group.tags.includes("salt")) return "Iodized Salt";
+        if (group.tags.includes("tea")) return "Tea Powder";
+        if (group.tags.includes("dal")) return "Toor Dal";
+      }
+    }
+  }
+
+  let cleaned = lower
+    .replace(/\b(add|remove|check|sold|received|set|cheyyi|karo|of|ki|ka|nundi|aayi|vachindi)\b/gi, "")
+    .replace(/\b(\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|rendu|moodu|naalugu|aaidu|aaru|ek|do|teen|char|paanch)\b/gi, "")
+    .replace(/\b(kg|bag|bags|bori|borii|carton|cartons|box|boxes|dozen|litre|litres|packet|packets|piece|pieces|unit|units)\b/gi, "")
+    .replace(/[^\w\s]/gi, "")
+    .trim();
+
+  if (cleaned.length > 2) {
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return "New Spoken Product";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN PARSE ENTRY POINT
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -475,11 +541,13 @@ export function parseVoiceIntent(
     };
   }
 
-  const codeMix        = detectCodeMix(text);
-  const action         = extractAction(text);
-  const quantity       = extractQuantity(text);
-  const matchedUnitKey = matchTradeUnit(text);
-  const matchedProduct = findBestProductMatch(text, products);
+  const normalizedText = normalizePhoneticScript(text);
+  const codeMix        = detectCodeMix(normalizedText);
+  const action         = extractAction(normalizedText);
+  const quantity       = extractQuantity(normalizedText);
+  const matchedUnitKey = matchTradeUnit(normalizedText);
+  const matchedProduct = findBestProductMatch(normalizedText, products);
+  const candidateName  = matchedProduct?.name || extractCandidateProductName(text);
 
   const tradeUnit: TradeUnitKey =
     matchedUnitKey ??
@@ -504,7 +572,7 @@ export function parseVoiceIntent(
   return {
     rawText: text,
     action,
-    productName: matchedProduct?.name,
+    productName: candidateName,
     matchedProduct,
     quantity,
     tradeUnit,

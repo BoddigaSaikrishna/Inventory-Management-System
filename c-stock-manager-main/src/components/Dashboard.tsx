@@ -413,6 +413,7 @@ const Dashboard = () => {
         intent={activeVoiceIntent}
         products={products}
         onClose={() => setShowVoiceModal(false)}
+        onCreateProduct={(data) => addProduct(data)}
         onConfirm={(finalIntent) => {
           executeVoiceIntent(finalIntent);
           setVoiceInputText("");
