@@ -301,6 +301,21 @@ export const PRODUCT_CATALOG_ALIASES: Array<{
       "dal check karo","pappu stock cheyyi","dal add karo",
     ],
   },
+  {
+    tags: ["eggs","egg","guddu","gudlu","anda","ande","muttai"],
+    aliases: [
+      // English
+      "eggs","egg","dozen eggs","egg tray","farm eggs",
+      // Hindi/Hinglish
+      "anda","ande","अंडा","अंडे","anda tray",
+      // Telugu/Tenglish
+      "guddu","gudlu","గుడ్డు","గుడ్లు","కోడి గుడ్లు",
+      // Tamil/Tanglish
+      "muttai","mutta","முட்டை",
+      // code-mixed
+      "eggs add karo","gudlu check cheyyi","anda stock",
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -581,4 +596,41 @@ export function parseVoiceIntent(
     language: currentLang,
     feedbackMessage,
   };
+}
+
+/**
+ * Parse single or multi-item compound spoken utterances.
+ * Example: "Add 5 bags of rice and 12 dozens of eggs"
+ * Splits by " and ", " aur ", " మరియు ", ",", "&" and parses each item independently.
+ */
+export function parseCompoundVoiceIntents(
+  rawText: string,
+  products: Product[],
+  currentLang: string = "hi-IN"
+): ParsedVoiceIntent[] {
+  const text = rawText.trim();
+  if (!text) return [];
+
+  // Split by conjunctions
+  const parts = text.split(/\b(?:and|aur|మరియు|మరియూ|&)\b|,/gi).map((p) => p.trim()).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return [parseVoiceIntent(text, products, currentLang)];
+  }
+
+  const firstIntent = parseVoiceIntent(parts[0], products, currentLang);
+  const defaultAction = firstIntent.action !== "UNKNOWN" ? firstIntent.action : "ADD";
+
+  const results: ParsedVoiceIntent[] = [firstIntent];
+
+  for (let i = 1; i < parts.length; i++) {
+    const part = parts[i];
+    let intent = parseVoiceIntent(part, products, currentLang);
+    if (intent.action === "UNKNOWN") {
+      intent = { ...intent, action: defaultAction };
+    }
+    results.push(intent);
+  }
+
+  return results;
 }

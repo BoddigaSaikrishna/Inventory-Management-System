@@ -3,7 +3,7 @@ import { useInventory } from "@/hooks/useInventory";
 import { useAuth } from "@/hooks/useAuth";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import type { Product, SortField, SortOrder, LanguageCode, ParsedVoiceIntent } from "@/types/inventory";
-import { parseVoiceIntent } from "@/lib/nlpParser";
+import { parseVoiceIntent, parseCompoundVoiceIntents } from "@/lib/nlpParser";
 import { speakText } from "@/lib/speech";
 import { enqueueOfflineAction, type OfflineQueueEntry } from "@/lib/offlineQueue";
 import LoginScreen from "@/components/LoginScreen";
@@ -116,23 +116,22 @@ const Dashboard = () => {
    */
   const handleProcessVoiceInput = (rawText: string) => {
     if (!rawText.trim()) return;
-    const parsed = parseVoiceIntent(rawText, products, currentLanguage);
+    const compoundIntents = parseCompoundVoiceIntents(rawText, products, currentLanguage);
 
     if (!isOnline) {
-      // Queue for later sync instead of executing now
-      enqueueOfflineAction(parsed);
-      setOfflineQueuedCount((c) => c + 1);
+      for (const intent of compoundIntents) {
+        enqueueOfflineAction(intent);
+      }
+      setOfflineQueuedCount((c) => c + compoundIntents.length);
       setVoiceInputText("");
-      // Brief visual feedback via alert
-      const productLabel = parsed.matchedProduct?.name ?? "product";
-      const qty = parsed.quantity ?? 1;
       window.alert(
-        `⏳ Offline: Action queued!\n\n"${parsed.action} ${qty} of ${productLabel}" will be executed automatically when you reconnect.`
+        `⏳ Offline: ${compoundIntents.length} action(s) queued for automatic sync!`
       );
       return;
     }
 
-    setActiveVoiceIntent(parsed);
+    // Process the first parsed intent in confirmation modal (or single intent)
+    setActiveVoiceIntent(compoundIntents[0]);
     setShowVoiceModal(true);
   };
 
