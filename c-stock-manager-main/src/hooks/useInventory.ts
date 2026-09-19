@@ -1,11 +1,22 @@
 import { useState, useCallback, useEffect } from "react";
-import type { Product, SortField, SortOrder } from "@/types/inventory";
+import type { Product, Transaction, ParsedVoiceIntent, SortField, SortOrder } from "@/types/inventory";
+import { convertTradeToBase, TRADE_UNITS } from "@/lib/tradeUnits";
 
-const STORAGE_KEY = "ims_products";
+const PRODUCTS_STORAGE_KEY = "ims_v2_products";
+const TRANSACTIONS_STORAGE_KEY = "ims_v2_transactions";
+
+// Force wipe any existing dummy data stored in browser localStorage
+const DUMMY_FORCE_CLEARED_KEY = "ims_v2_all_dummy_cleared_v3";
+if (localStorage.getItem(DUMMY_FORCE_CLEARED_KEY) !== "true") {
+  localStorage.removeItem(PRODUCTS_STORAGE_KEY);
+  localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
+  localStorage.removeItem("ims_v2_offline_queue");
+  localStorage.setItem(DUMMY_FORCE_CLEARED_KEY, "true");
+}
 
 function loadProducts(): Product[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(PRODUCTS_STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -13,7 +24,20 @@ function loadProducts(): Product[] {
 }
 
 function saveProducts(products: Product[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+  localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(products));
+}
+
+function loadTransactions(): Transaction[] {
+  try {
+    const raw = localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTransactions(transactions: Transaction[]) {
+  localStorage.setItem(TRANSACTIONS_STORAGE_KEY, JSON.stringify(transactions));
 }
 
 function nextId(products: Product[]): number {
@@ -23,10 +47,15 @@ function nextId(products: Product[]): number {
 
 export function useInventory() {
   const [products, setProducts] = useState<Product[]>(loadProducts);
+  const [transactions, setTransactions] = useState<Transaction[]>(loadTransactions);
 
   useEffect(() => {
     saveProducts(products);
   }, [products]);
+
+  useEffect(() => {
+    saveTransactions(transactions);
+  }, [transactions]);
 
   const addProduct = useCallback(
     (data: Omit<Product, "id" | "createdAt">) => {
@@ -35,7 +64,22 @@ export function useInventory() {
         id: nextId(products),
         createdAt: new Date().toISOString(),
       };
-      setProducts((prev) => [...prev, p]);
+      setProducts((prev) => [p, ...prev]);
+
+      // Record transaction
+      const tx: Transaction = {
+        id: "tx_" + Date.now(),
+        timestamp: new Date().toISOString(),
+        type: "ADD",
+        productId: p.id,
+        productName: p.name,
+        quantityChange: p.quantity,
+        tradeUnitQuantity: Number((p.quantity / p.tradeUnitSize).toFixed(1)),
+        tradeUnitLabel: TRADE_UNITS[p.tradeUnit]?.label || p.tradeUnit,
+        userConfirmed: true,
+        notes: "New product created",
+      };
+      setTransactions((prev) => [tx, ...prev]);
       return p;
     },
     [products]
@@ -44,7 +88,7 @@ export function useInventory() {
   const updateProduct = useCallback(
     (id: number, data: Partial<Omit<Product, "id" | "createdAt">>) => {
       setProducts((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+        prev.map((p) => (p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p))
       );
     },
     []
@@ -54,54 +98,86 @@ export function useInventory() {
     setProducts((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
-  const searchProducts = useCallback(
-    (query: string) => {
-      const q = query.toLowerCase().trim();
-      if (!q) return products;
-      return products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q) ||
-          p.id.toString().includes(q)
-      );
+  /**
+   * Execute voice intent parsed from Speech-to-Text
+   */
+  const executeVoiceIntent = useCallback(
+    (intent: ParsedVoiceIntent) => {
+      if (!intent.matchedProduct || intent.quantity === undefined) return;
+
+      const target = intent.matchedProduct;
+      const tradeQty = intent.quantity;
+      const unitSize = target.tradeUnitSize || 1;
+      const baseQtyChange = tradeQty * unitSize;
+
+      let newBaseQty = target.quantity;
+      let txType: "ADD" | "REMOVE" | "SET" = "ADD";
+
+      if (intent.action === "ADD") {
+        newBaseQty = target.quantity + baseQtyChange;
+        txType = "ADD";
+      } else if (intent.action === "REMOVE") {
+        newBaseQty = Math.max(0, target.quantity - baseQtyChange);
+        txType = "REMOVE";
+      } else if (intent.action === "SET") {
+        newBaseQty = baseQtyChange;
+        txType = "SET";
+      }
+
+      // Update product quantity
+      updateProduct(target.id, { quantity: newBaseQty });
+
+      // Log audit transaction
+      const tx: Transaction = {
+        id: "tx_" + Date.now(),
+        timestamp: new Date().toISOString(),
+        type: txType,
+        productId: target.id,
+        productName: target.name,
+        quantityChange: txType === "REMOVE" ? -baseQtyChange : baseQtyChange,
+        tradeUnitQuantity: tradeQty,
+        tradeUnitLabel: TRADE_UNITS[intent.tradeUnit || target.tradeUnit]?.label || intent.tradeUnit || "unit",
+        originalVoiceText: intent.rawText,
+        userConfirmed: true,
+      };
+
+      setTransactions((prev) => [tx, ...prev]);
     },
-    [products]
+    [updateProduct]
   );
 
-  const sortProducts = useCallback(
-    (field: SortField, order: SortOrder) => {
-      return [...products].sort((a, b) => {
-        let cmp = 0;
-        if (field === "price") cmp = a.price - b.price;
-        else if (field === "quantity") cmp = a.quantity - b.quantity;
-        else if (field === "name") cmp = a.name.localeCompare(b.name);
-        else cmp = a.id - b.id;
-        return order === "asc" ? cmp : -cmp;
-      });
-    },
-    [products]
-  );
+  const getLowStockProducts = useCallback(() => {
+    return products.filter((p) => p.quantity <= p.minStockThreshold);
+  }, [products]);
 
-  const getLowStock = useCallback(
-    (threshold: number) => {
-      return products.filter((p) => p.quantity <= threshold);
-    },
-    [products]
-  );
+  // Inventory value calculations
+  const totalValue = products.reduce((s, p) => {
+    const tradeUnitsCount = p.tradeUnitSize > 0 ? p.quantity / p.tradeUnitSize : p.quantity;
+    return s + p.price * tradeUnitsCount;
+  }, 0);
 
-  const totalValue = products.reduce((s, p) => s + p.price * p.quantity, 0);
-  const totalItems = products.reduce((s, p) => s + p.quantity, 0);
+  const totalItemsCount = products.length;
+  const lowStockCount = getLowStockProducts().length;
+
+  const clearAllData = useCallback(() => {
+    setProducts([]);
+    setTransactions([]);
+    localStorage.removeItem(PRODUCTS_STORAGE_KEY);
+    localStorage.removeItem(TRANSACTIONS_STORAGE_KEY);
+    localStorage.removeItem("ims_v2_offline_queue");
+  }, []);
 
   return {
     products,
+    transactions,
     addProduct,
     updateProduct,
     deleteProduct,
-    searchProducts,
-    sortProducts,
-    getLowStock,
+    clearAllData,
+    executeVoiceIntent,
+    getLowStockProducts,
     totalValue,
-    totalItems,
-    productCount: products.length,
+    totalItemsCount,
+    lowStockCount,
   };
 }

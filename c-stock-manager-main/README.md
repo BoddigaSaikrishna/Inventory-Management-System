@@ -1,18 +1,24 @@
-# Inventory Pro Management System
+# PS-107 Java Inventory Console
 
-A professional, high-performance inventory and stock tracking application designed for small to medium businesses.
+This workspace now includes a Java console application that matches the PS-107 capstone brief:
 
-## Features
-- **Real-time Metrics**: Track Total Products, Value, Units, and Low Stock.
-- **CRUD Operations**: Add, update, and manage your inventory with ease.
-- **Advanced Filtering**: Live search and smart sorting of product catalogs.
-- **Low Stock Alerts**: Automatically highlights items needing restock.
+- product and category abstraction
+- receive/issue stock operations with stock-out exceptions
+- SKU-based inventory tracking and low-stock alerts
+- supplier records
+- snapshot export/import to disk
+- menu-driven console interaction
 
-## Getting Started
-To run the development server:
-```bash
-npm install
-npm run dev
+## Run
+The Java app is located in `java-console/`.
+
+Compile and run from that folder with a JDK installed:
+
+```powershell
+Set-Location 'c:\Users\bsaik\Desktop\Projects\Inventory Management\c-stock-manager-main'
+$sources = Get-ChildItem -Recurse 'java-console\src' -Filter *.java | ForEach-Object { $_.FullName }
+javac -d 'java-console\out' @sources
+java -cp 'java-console\out' ps107.inventory.Main
 ```
 
-The system will start on [http://localhost:8080](http://localhost:8080) (or the next available port).
+The existing React files remain in the workspace, but the PS-107 solution lives in the Java console app.

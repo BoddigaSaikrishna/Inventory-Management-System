@@ -3,25 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
     <link rel="icon" type="image/png" href="/logo.png" />
-    <title>Inventory Pro Management</title>
-    <meta name="description" content="Professional Stock & Inventory Tracking System" />
-    <meta name="author" content="Inventory Pro" />
+    <title>VoiceStock India — Inventory Manager</title>
+    <meta name="description" content="Voice-first inventory management for small businesses and kirana stores in India. Supports Hindi, Telugu, Tamil, and more." />
+    <meta name="author" content="VoiceStock India" />
+    <meta name="theme-color" content="#10b981" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VoiceStock" />
 
     <!-- Open Graph Metadata -->
-    <meta property="og:title" content="Inventory Pro Management" />
-    <meta property="og:description" content="Manage your stock efficiently with our modern inventory tracking system." />
+    <meta property="og:title" content="VoiceStock India — Inventory Manager" />
+    <meta property="og:description" content="Voice-first inventory management for small businesses and kirana stores in India." />
     <meta property="og:type" content="website" />
 
-    <!-- Social Media Metadata -->
+    <!-- Twitter/Social -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@InventoryPro" />
 
   </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Service Worker Registration for Offline Support -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(registration) {
+              console.log('[VoiceStock] Service Worker registered. Scope:', registration.scope);
+            })
+            .catch(function(err) {
+              console.warn('[VoiceStock] Service Worker registration failed:', err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
+

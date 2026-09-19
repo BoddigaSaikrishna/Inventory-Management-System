@@ -1,0 +1,11 @@
+ps107\inventory\model\Category.class
+ps107\inventory\model\PerishableProduct.class
+ps107\inventory\model\Product.class
+ps107\inventory\model\Supplier.class
+ps107\inventory\exception\InsufficientStockException.class
+ps107\inventory\model\StandardProduct.class
+ps107\inventory\Main.class
+ps107\inventory\model\DepartmentCategory.class
+ps107\inventory\InventoryService.class
+ps107\inventory\InventorySnapshot.class
+ps107\inventory\SnapshotIO.class
