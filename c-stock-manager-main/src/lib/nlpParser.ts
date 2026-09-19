@@ -304,16 +304,125 @@ export const PRODUCT_CATALOG_ALIASES: Array<{
   {
     tags: ["eggs","egg","guddu","gudlu","anda","ande","muttai"],
     aliases: [
-      // English
       "eggs","egg","dozen eggs","egg tray","farm eggs",
-      // Hindi/Hinglish
       "anda","ande","अंडा","अंडे","anda tray",
-      // Telugu/Tenglish
       "guddu","gudlu","గుడ్డు","గుడ్లు","కోడి గుడ్లు",
-      // Tamil/Tanglish
       "muttai","mutta","முட்டை",
-      // code-mixed
       "eggs add karo","gudlu check cheyyi","anda stock",
+    ],
+  },
+  {
+    tags: ["milk","doodh","paalu","curd","dahi","perugu","amul","nandini","heritage"],
+    aliases: [
+      "milk","dairy milk","amul milk","heritage milk","sangam milk","nandini milk",
+      "doodh","dudh","दूध","paalu","పాలు","మజ్జిగ",
+      "curd","dahi","दही","perugu","పెరుగు","yoghurt",
+      "milk packet","milk liter","milk ltr","milk bottle",
+    ],
+  },
+  {
+    tags: ["biscuit","biscuits","parle","britannia","oreo","bourbon","goodday"],
+    aliases: [
+      "biscuit","biscuits","parle","parle g","britannia","marie","marie gold",
+      "good day","oreo","bourbon","5050","biscut","बिस्कुट","బిస్కెట్లు",
+      "biscuit packet","biscuits box","biscuit carton",
+    ],
+  },
+  {
+    tags: ["noodle","noodles","maggi","yippee","pasta","ramen"],
+    aliases: [
+      "noodle","noodles","maggi","maggie","yippee","top ramen","pasta",
+      "मैगी","మాగీ","నూడుల్స్","maggi packet","maggi box","maggi carton",
+    ],
+  },
+  {
+    tags: ["chips","lays","kurkure","namkeen","sev","bhujia","mixture","bingo"],
+    aliases: [
+      "chips","lays","kurkure","bingo","namkeen","sev","bhujia","mixture",
+      "नमकीन","చిప్స్","మిశ్రమం","chips packet","namkeen packet",
+    ],
+  },
+  {
+    tags: ["chocolate","chocolates","dairymilk","5star","kitkat","perk","munch"],
+    aliases: [
+      "chocolate","chocolates","dairy milk","cadbury","5 star","five star",
+      "kitkat","perk","munch","chocolates box","चॉकलेट","చాక్లేట్లు",
+    ],
+  },
+  {
+    tags: ["coffee","nescafe","bru","instant"],
+    aliases: [
+      "coffee","nescafe","bru","filter coffee","instant coffee",
+      "कॉफ़ी","కాఫీ","coffee powder","coffee packet",
+    ],
+  },
+  {
+    tags: ["colddrink","drink","thumsup","coke","coca cola","sprite","pepsi","frooti","maaza","7up"],
+    aliases: [
+      "cold drink","soft drink","thums up","coke","coca cola","sprite",
+      "pepsi","7up","frooti","maaza","thumbsup","कोल्ड ड्रिंक","కూల్ డ్రింక్",
+      "drink bottle","soda bottle","can",
+    ],
+  },
+  {
+    tags: ["masala","mirchi","chilli","haldi","turmeric","dhaniya","jeera","pasupu","kaaram"],
+    aliases: [
+      "masala","mirchi","red chilli","chilli powder","kaaram","లాల్ మిర్చి",
+      "haldi","turmeric","pasupu","हल्दी","పసుపు",
+      "dhaniya","coriander","dhania","धनिया","ధనియాలు",
+      "jeera","cumin","जीरा","జీలకర్ర",
+      "garam masala","chicken masala","sambar powder","everest","mdh","mtr",
+    ],
+  },
+  {
+    tags: ["detergent","surf","washing","wheel","tide","aerial","rin"],
+    aliases: [
+      "detergent","surf","surf excel","tide","aerial","wheel","ghari",
+      "washing powder","detergent powder","సర్ఫ్","డిటర్జెంట్","निरमा",
+      "rin soap","wheel bar","surf packet",
+    ],
+  },
+  {
+    tags: ["dishwash","vim","exo","pril","harpic","lizol"],
+    aliases: [
+      "dishwash","vim","vim bar","vim liquid","exo","pril","harpic","lizol",
+      "विम","విమ్","साबुन","dishwash bar",
+    ],
+  },
+  {
+    tags: ["shampoo","clinicplus","sunsilk","headshoulders","pantene","meera"],
+    aliases: [
+      "shampoo","clinic plus","sunsilk","head and shoulders","pantene","meera",
+      "शैम्पू","షాంపూ","shampoo sachet","shampoo bottle",
+    ],
+  },
+  {
+    tags: ["toothpaste","paste","colgate","pepsodent","close up","sensodyne"],
+    aliases: [
+      "toothpaste","paste","colgate","pepsodent","close up","sensodyne","dabur red",
+      "टूथपेस्ट","పేస్ట్","toothbrush",
+    ],
+  },
+  {
+    tags: ["matchbox","matches","agarbatti","incense","pooja"],
+    aliases: [
+      "matchbox","matches","match box","agarbatti","incense sticks","cycle agarbatti",
+      "माचिस","అగ్గిపెట్టె","అగరబత్తి","pooja oil",
+    ],
+  },
+  {
+    tags: ["mosquito","goodknight","allout","coil"],
+    aliases: [
+      "mosquito","good knight","all out","goodknight refill","allout refill",
+      "mosquito coil","odomos","गुड नाइट","మస్కిటో",
+    ],
+  },
+  {
+    tags: ["dryfruit","cashew","kaju","almond","badam","raisins","kismis"],
+    aliases: [
+      "cashew","cashews","kaju","काजू","జీడిపప్పు",
+      "almond","almonds","badam","बादाम","బాదం",
+      "raisins","kismis","kishmish","किसमिस","కిస్మిస్",
     ],
   },
 ];
@@ -517,6 +626,22 @@ function extractCandidateProductName(text: string): string {
         if (group.tags.includes("salt")) return "Iodized Salt";
         if (group.tags.includes("tea")) return "Tea Powder";
         if (group.tags.includes("dal")) return "Toor Dal";
+        if (group.tags.includes("eggs")) return "Eggs";
+        if (group.tags.includes("milk")) return "Milk Packet";
+        if (group.tags.includes("biscuit")) return "Parle-G Biscuits";
+        if (group.tags.includes("noodle")) return "Maggi Noodles";
+        if (group.tags.includes("chips")) return "Lays Chips";
+        if (group.tags.includes("chocolate")) return "Dairy Milk Chocolate";
+        if (group.tags.includes("coffee")) return "Nescafe Coffee";
+        if (group.tags.includes("colddrink")) return "Thums Up Soft Drink";
+        if (group.tags.includes("masala")) return "Red Chilli Powder";
+        if (group.tags.includes("detergent")) return "Surf Excel Detergent";
+        if (group.tags.includes("dishwash")) return "Vim Dishwash Bar";
+        if (group.tags.includes("shampoo")) return "Clinic Plus Shampoo";
+        if (group.tags.includes("toothpaste")) return "Colgate Toothpaste";
+        if (group.tags.includes("matchbox")) return "Agarbatti & Matchbox";
+        if (group.tags.includes("mosquito")) return "Good Knight Refill";
+        if (group.tags.includes("dryfruit")) return "Cashews (Kaju)";
       }
     }
   }
